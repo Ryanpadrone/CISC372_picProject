@@ -64,6 +64,7 @@ void convolute(Image* srcImage,Image* destImage,Matrix algorithm){
     int H = srcImage->height;
     int W = srcImage->width;
     int C = srcImage->bpp;
+    int row, col, bit;
     #pragma omp parallel for schedule(static)
     for (int row=0; row<H; ++row){
         for (int col=0; col<W; ++col){

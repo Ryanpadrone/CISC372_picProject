@@ -1,0 +1,10 @@
+Script started on Tue Oct 28 21:36:14 2025
+]0;ryn@r1n03.darwin:~/CISC372_picProject[?1034h[ryn@r1n03 CISC372_picProject]$ export o OMP_NUM_THREADS=$CLURM     SLURM_CPUS_PER_TASK
+]0;ryn@r1n03.darwin:~/CISC372_picProject[ryn@r1n03 CISC372_picProject]$ sryn    un ./image_omp pic1.jpg edge
+Took 6 seconds
+]0;ryn@r1n03.darwin:~/CISC372_picProject[ryn@r1n03 CISC372_picProject]$ sry un ./image pic1.jpg edge
+Took 2 seconds
+]0;ryn@r1n03.darwin:~/CISC372_picProject[ryn@r1n03 CISC372_picProject]$ exit
+exit
+
+Script done on Tue Oct 28 21:37:41 2025
