@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include "image.h"
 
-#include <pthread.h>   // <-- added
+#include <omp.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -24,18 +24,7 @@ Matrix algorithms[]={
     {{0,0,0},{0,1,0},{0,0,0}}
 };
 
-#ifndef NUM_THREADS
-#define NUM_THREADS 4   // change at compile time with -DNUM_THREADS=8 if you want
-#endif
-
-// Minimal thread work item: copy of kernel + row range
-typedef struct {
-    Image* src;
-    Image* dst;
-    Matrix K;     // array member; we'll fill it with memcpy (arrays aren't assignable)
-    int r0, r1;   // rows [r0, r1) 
-} Work;
-
+#
 //getPixelValue - Computes the value of a specific pixel on a specific channel using the selected convolution kernel
 //Paramters: srcImage:  An Image struct populated with the image being convoluted
 //           x: The x coordinate of the pixel
@@ -52,7 +41,7 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
     if (my<0) my=0;
     if (px>=srcImage->width) px=srcImage->width-1;
     if (py>=srcImage->height) py=srcImage->height-1;
-    float sum=
+    uint8_t result=
         algorithm[0][0]*srcImage->data[Index(mx,my,srcImage->width,bit,srcImage->bpp)]+
         algorithm[0][1]*srcImage->data[Index(x,my,srcImage->width,bit,srcImage->bpp)]+
         algorithm[0][2]*srcImage->data[Index(px,my,srcImage->width,bit,srcImage->bpp)]+
@@ -62,24 +51,9 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
         algorithm[2][0]*srcImage->data[Index(mx,py,srcImage->width,bit,srcImage->bpp)]+
         algorithm[2][1]*srcImage->data[Index(x,py,srcImage->width,bit,srcImage->bpp)]+
         algorithm[2][2]*srcImage->data[Index(px,py,srcImage->width,bit,srcImage->bpp)];
-    if (sum<0.0f) sum=0.0f;
-    if (sum>255.0f) sum = 255.0f;
-    return (uint8_t)(sum+0.5f);
+    return result;
 }
 
-
-static void* worker(void* arg){
-    Work* w=(Work*)arg;
-    for (int row=w->r0; row<w->r1; ++row){
-        for (int col=0; col<w->src->width; ++col){
-            for (int bit=0; bit<w->src->bpp; ++bit){
-                w->dst->data[Index(col,row,w->src->width,bit,w->src->bpp)] =
-                    getPixelValue(w->src, col, row, bit, w->K);
-            }
-        }
-    }
-    return NULL;
-}
 
 //convolute:  Applies a kernel matrix to an image
 //Parameters: srcImage: The image being convoluted
@@ -88,29 +62,16 @@ static void* worker(void* arg){
 //Returns: Nothing
 void convolute(Image* srcImage,Image* destImage,Matrix algorithm){
     int H = srcImage->height;
-    int T = NUM_THREADS;
-    if (T < 1) T = 1;
-    if (T > H) T = H;
-
-    pthread_t th[T];
-    Work jobs[T];
-
-    int base = H / T, rem = H % T, r = 0;
-    for (int t=0; t<T; ++t){
-        int rows = base + (t < rem ? 1 : 0);
-        jobs[t].src = srcImage;
-        jobs[t].dst = destImage;
-        // copy the 3x3 kernel into this job (arrays cannot be assigned)
-        for (int i = 0; i<3; ++i)
-            for (int j=0; j<3; ++j)
-                jobs[t].K[i][j]=algorithm[i][j];
-
-        jobs[t].r0  = r;
-        jobs[t].r1  = r + rows;
-        r += rows;
-        pthread_create(&th[t], NULL, worker, &jobs[t]);
+    int W = srcImage->width;
+    int C = srcImage->bpp;
+    #pragma omp parallel for schedule(static)
+    for (int row=0; row<H; ++row){
+        for (int col=0; col<W; ++col){
+            for (int bit=0; bit<C; ++bit){
+                destImage->data[Index(col,row,W,bit,C)]=getPixelValue(srcImage,col,row,bit,algorithm);
+            }
+        }
     }
-    for (int t=0; t<T; ++t) pthread_join(th[t], NULL);
 }
 
 //Usage: Prints usage information for the program
