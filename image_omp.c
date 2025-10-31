@@ -60,20 +60,6 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
 //            destImage: A pointer to a  pre-allocated (including space for the pixel array) structure to receive the convoluted image.  It should be the same size as srcImage
 //            algorithm: The kernel matrix to use for the convolution
 //Returns: Nothing
-void convolute(Image* srcImage,Image* destImage,Matrix algorithm){
-    int H = srcImage->height;
-    int W = srcImage->width;
-    int C = srcImage->bpp;
-    int row, col, bit;
-    #pragma omp parallel for schedule(static)
-    for (int row=0; row<H; ++row){
-        for (int col=0; col<W; ++col){
-            for (int bit=0; bit<C; ++bit){
-                destImage->data[Index(col,row,W,bit,C)]=getPixelValue(srcImage,col,row,bit,algorithm);
-            }
-        }
-    }
-}
 
 //Usage: Prints usage information for the program
 //Returns: -1
@@ -119,8 +105,21 @@ int main(int argc,char** argv){
     destImage.width=srcImage.width; // NOTE: if your Image.width is not a pointer, use srcImage.width
     destImage.data=malloc(sizeof(uint8_t)*destImage.width*destImage.bpp*destImage.height);
 
-    convolute(&srcImage,&destImage,algorithms[type]);
+    Matrix alg = {0};
+    for (int r=0; r<3; ++r)
+        for (int c=0; c<3; ++c)
+            alg[r][c] = algorithms[type][r][c];
 
+    int row, pix, bit;
+    #pragma omp parallel for schedule(static) private(row,pix,bit) shared(srcImage,destImage,alg)
+    for (int row = 0; row < srcImage.height; ++row) {
+        for (int pix = 0; pix < srcImage.width; ++pix) {
+            for (int bit = 0; bit < srcImage.bpp; ++bit) {
+                destImage.data[Index(pix,row,srcImage.width,bit,srcImage.bpp)] =
+                getPixelValue(&srcImage, pix, row, bit, alg);
+            }
+        }
+    }
     stbi_write_png("output.png",destImage.width,destImage.height,destImage.bpp,destImage.data,destImage.bpp*destImage.width);
     stbi_image_free(srcImage.data);
     
